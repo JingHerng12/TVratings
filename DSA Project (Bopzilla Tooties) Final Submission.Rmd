@@ -1,0 +1,343 @@
+---
+title: "Bopzilla Tooties (DSA2101 Group Project)"
+author: "Charlene Gan Zhiyu, Neoh Jing Herng, Ng Xiang Ting, Ryan Chong Junyi, Sean Ong Siyi"
+date: "`r Sys.Date()`" 
+output: 
+  html_document:
+    toc: true
+    toc_float: true 
+    collapsed: true 
+    smooth_scroll: true
+    toc_depth: 3
+    number_sections: FALSE
+    code_folding: show
+    highlight: tango
+    theme: flatly
+    
+---
+<style>
+#TOC {
+  colour #2563eb;
+  font-size: 16px;
+  border-color: #000000;
+}
+  
+</style>
+
+```{r setup, include=FALSE}
+# Global options for the RMarkdown document
+knitr::opts_chunk$set(echo = FALSE,  
+                      include = TRUE,  
+                      message = FALSE, warning = FALSE,
+                      fig.align = "center", out.width = "80%")
+
+library(stringr)
+library(readxl)
+library(tidyverse)
+library(ggthemes)
+library(patchwork)
+library(forcats) 
+library(ggrepel)
+library(knitr)
+
+
+
+```
+
+
+```{r data, include = FALSE}
+holiday_episodes <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2023/2023-12-19/holiday_episodes.csv')
+holiday_episode_genres <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2023/2023-12-19/holiday_episode_genres.csv')
+```
+
+# Introduction
+<div style="text-align: justify">
+The data set we will be using is the `Holiday Episodes` data set, with information gathered in December 2023 adapted from the Internet Movie Database. It contains entries about holiday TV episodes, which is defined to be individual episodes of TV shows with "holiday", "Christmas", "Hanukkah", or "Kwanzaa" (and its variants) in their title. The dataset provides us with information such as number of seasons and episodes, runtime, rating, and number of votes on the various holiday TV episodes. It consists of over 2000 observations across 26 variables. Additionally, a separate table on the `Holiday Episodes Genres` has been provided, showcasing all the different types of genres present in the aforementioned data set. 
+
+In Choudhary et al.'s (2023) study titled "Ratings and Factors Affecting Across Genres: A Study from the Entertainment Industry", it was reported that genre is a major determinant of ratings. Additionally, runtime showed a mild positive effect, and the genres `Drama` and `Comedy` had the highest intercepts in the regression models, suggesting strong baseline audience approval. In our project, we have decided to adopt the perspective of a prospective filmmaker creating a holiday episode in the 21st century. Through our visualizations, we seek to answer the central question: **What are the key factors in ensuring the success of a highly rated holiday episode, particularly pertaining to genre, frequency and runtime?**
+</div>
+
+# Data Cleaning and Summary 
+<div style="text-align: justify">
+To address our question of interest, we began the data cleaning process by narrowing our scope to holiday episodes produced in the 21st century, and analyzing the trends within the top 10 most frequent genres to further streamline our analysis, bolstering the relevancy and accuracy of our trend predictions as these are more likely to yield successful outcomes with their proven track record.
+
+Firstly, since each episode could belong to multiple genres, we used `separate` to cleanly divide up the different genres into distinct variables to individually analyse the influence of each genre across episodes. 
+
+Next, we used `left_join` to join the main dataset with the `Holiday Episodes Genres` table, using `tconst` to effectively list out the genres for each holiday episode in a more structured way. 
+
+Following which, `filter` helped to limit the year of the the holiday episode to that of the 21st century. To keep only the most relevant columns for our analysis, we proceeded to use `select` to retain only columns such as year, genres, runtime_minutes, and average_rating.
+
+Lastly, we identified the top 10 most frequently occurring genres using a simple `count` and  `slice_max`, to narrow our focus to the most commonly adopted narrative formats. NA values were respectively handles during the additional data cleaning process for each plot.
+</div>
+
+
+```{r Data-Cleaning, echo = TRUE }
+df <- holiday_episodes %>%
+      separate(genres, into = c("genre1", "genre2", "genre3"), sep = ",", fill = "right") %>%
+      left_join(holiday_episode_genres, by = "tconst") %>%
+      filter(year >= 2000) %>%
+      select(year, genre1, genre2, genre3, average_rating, runtime_minutes, genres)
+
+top_genres <- df %>%
+  count(genres) %>%
+  slice_max(n, n=10) %>%
+  pull(genres)
+
+```
+
+### Table 1
+```{r echo = FALSE}
+table1 <- df %>%
+  count(genres) %>%
+  slice_max(n, n=10) %>%
+  rename(Frequency = n, Genres = genres )
+kable(table1, align = "cc",
+      caption = "Table 1: Top 10 Genres by Frequency")
+
+```
+
+<div style="text-align: justify">
+This cleaned and filtered data set formed the basis of our subsequent visual analyses, which compare runtime, genre, and ratings to identify common patterns across successful holiday episodes. From the above table, `Comedy` can be seen to be the most frequent genre in the 21st century (and really, of all-time as well).  For our subsequent visualisations focusing on genre trends and runtime distributions, we aim to understand the key to success in producing a well-received holiday episode. 
+ </div>
+
+# Plot 1
+
+## Choice of Visualisation and Rationale
+<div style="text-align: justify">
+This first plot aims to provide a visualisation for the Ratings and Runtime of the Top Ten Most Frequent Genres for Holiday Episodes in the 21st Century, allowing us to identify the trends between these 4 variables. 
+
+For this plot, we had to access 4 main variables which we wanted to work with - these included the different genres, frequency (of these genres), runtime, and their ratings. We made use of the initial dataframe of `top_genres` to filter out the top 10 most frequent genres, and used `mutate()` in conjunction with `n()` to count the frequency, as well as `mean()` for the calculation of average rating and runtime, omitting na values using `na.rm = TRUE`. 
+
+The choice of a scatter plot using `geom_point()` was the most useful in representing our data. This selection allowed us to concisely visualise and interpret the multivariate relationships between the four variables. The colour coding of the different genres allowed us to easily tell them apart, and the size of the points that scaled with frequency offered us easy interpretation of which genres appeared more frequently than others. Adjusting the opacity of the points using `alpha`also allowed us to observe data points which had overlapped (ie. comedy and family ). 
+
+</div>
+## Code Chunk and Visualisation 
+
+```{r additional data cleaning for plot 1 , echo = TRUE}
+
+
+dfp_1 <- df %>%
+      filter(genres %in% top_genres) %>%
+      group_by(genres) %>%
+      mutate(frequency = n(),
+             ratings = mean(average_rating, na.rm = TRUE),
+             rt = mean(runtime_minutes, na.rm = TRUE))
+
+```
+
+```{r fig.cap = "Scatter plot showing the trends between frequency, average ratings and runtime of the the top ten most popular genres in the 21st century where `Drama` was the highest rated genre while `Comedy` was the most frequent genre" ,  echo = TRUE}
+
+ggplot(dfp_1, aes(x = rt, y = ratings, color = genres, size = frequency)) +
+      geom_point(alpha = 0.1) +
+      scale_size_continuous(range = c(5,30)) +
+      scale_y_continuous(limits = c(7,8)) +
+      geom_text(aes(label = frequency), color = "white", fontface = "bold", size = 2, hjust = 0.5, vjust = 0.5) +
+      geom_hline(yintercept = mean(df$average_rating), linetype = "dashed", color = "red") +
+      annotate("text", x = max(dfp_1$rt), y = mean(df$average_rating) + 0.05, 
+         label = "Avg Rating", color = "red", fontface = "bold", hjust = 1) +
+      labs(x = "Runtime (Minutes)",
+           y = "Average Ratings",
+           title = "Rating and Runtime of the Top Ten Most Frequent \nGenres for Holiday Episodes in the 21st Century") +
+      theme_minimal() +
+      theme(plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+            legend.text = element_text(size = 7),  
+            legend.title = element_text(size = 7),  
+            legend.justification = c(0.5, 1),  
+            legend.position = "top",  
+            legend.direction = "vertical", 
+            legend.box = "horizontal",  
+            axis.title = element_text(size = 10, face = "bold")) +
+      guides(color = guide_legend(nrow = 3, title = "Genres", order =1, override.aes = list(size = 5, alpha = 1) ),  
+             size = guide_legend(nrow = 1, title = "Frequency", order = 2, override.aes = list(size = c(2, 4, 6))))   
+```
+
+
+## Discussion
+<div style="text-align: justify">
+Generally speaking, there was some trend showing a positive correlation between frequency and ratings, with frequent genres such as `Comedy` and `Drama` scoring above the average rating of all genres. Additionally, there seem to be some trend between runtime and ratings as well, with  `Drama` having the highest rating and runtime and other highly rated genres like `Documentary` having a relatively long runtime as well. These observations were in-line with what was reported in Choudhary et al.'s (2023) paper, which states that there is a mild positive correlation between the two. Similar associations have been reported in prior studies, which note that longer runtimes often reflect more complex storytelling, which in turn correlates with higher audience approval (Sochay, 1994; Qumsiyeh & Ng, 2012). Granted, in the context of this visualisation, neither of these trends could be proven to be significant enough for a risk-averse filmmaker to make conclusive decisions from. Additionally, we postulate that a prospective filmmaker would be the most concerned with the ratings of a genre as we perceived ratings as the key determinant of success. In that regard, the genre `Drama` performed the best, boasting the highest rating amongst the genres.
+
+Moving forward, our subsequent visualisations would focus on the ratings of the genres, and not only how these ratings have changed over time, but also which combinations of genres would yield the highest rating.
+</div>
+# Plot 2
+
+## Choice of Visualisation and Rationale
+<div style="text-align: justify">
+For our second plot, we wished to see how the relative rankings of genres have changed with respect to time (years), attempting to find out which genres have increased in relative success in order to provide us a better idea of what could potentially perform well in the future.
+
+Likewise, this plot required us to first filter out the top 10 most frequent genres to work on. Next, we bin them into intervals of 5 years. Thereafter, we group them by their year intervals and then summarise the average ratings using `mean` and omitting na values using `na.rm = TRUE`. We subsequently assign rankings by mutating using `Rankings = min_rank(desc(avg_rating))`. We then get the latest year group per genre by filtering each genre to only its most recent time bin.
+
+The choice of a line plot with 5 year intervals was the most apt given the time-series nature of our visualisation, allowing us to easily spot the trends through the 21st century, marking the most significant shifts in rankings.
+</div>
+
+## Code Chunk and Visualisation 
+
+```{r additional data cleaning for plot 2 , echo = TRUE}
+
+dfp2_binned <- df %>%
+  filter(genres %in% top_genres) %>%
+  mutate(year_group = cut(year, breaks = seq(min(year), max(year) + 5, by = 5), right = FALSE)) %>%
+  group_by(year_group, genres) %>%
+  summarise(avg_rating = mean(average_rating, na.rm = TRUE), .groups = "drop") %>%
+  group_by(year_group) %>%
+  mutate(Rankings = min_rank(desc(avg_rating)))
+
+dfp2_labels <-dfp2_binned %>%
+  mutate(year_group = as.character(year_group)) %>%
+  group_by(genres) %>%
+  filter(year_group == max(year_group)) %>%
+  ungroup() %>%
+  mutate(avg_rating = if_else(genres == "Animation", avg_rating - 0.025, avg_rating),
+         avg_rating = if_else(genres == "Family", avg_rating + 0.02, avg_rating))
+
+
+```
+
+```{r, fig.cap = "Line plot showing how the rankings (in terms of mean ratings) of the top ten most frequent genres in the 21st century have changed over the years where `Romance`, `Drama`, `Documentary` and `Comedy` remain the top 4 highest rated genre in recent times" , echo = TRUE}
+
+ggplot(dfp2_binned, aes(x = year_group, y = Rankings, group = genres, color = genres)) +
+  geom_line(lwd = 1.5) +
+  geom_point(size = 5) +
+  scale_color_manual(values = c("Game-Show" = "grey", "Family" = "grey", "Animation" = "grey",
+                                "Adventure" = "grey", "Reality-TV" = "grey", "Action" = "grey",
+                                "Romance" = "maroon", "Drama" = "steelblue",
+                                "Documentary" = "forestgreen", "Comedy" = "orange")) +
+  scale_y_reverse(breaks = 1:10) +
+  scale_x_discrete(labels = c('[2000,2005)'='2000-2005',
+                              '[2005,2010)'='2005-2010',
+                              '[2010,2015)'='2010-2015',
+                              '[2015,2020)'='2015-2020',
+                              '[2020,2025)'='2020-2025')) +
+  geom_label(data = dfp2_labels, aes(label = genres),hjust = -0.1, 
+            nudge_x = 0.1, show.legend = FALSE, size = 3) +
+  labs(
+    title = "Rankings of Top Genres Based on Average Ratings",
+    subtitle = "(Grouped by 5-Year Intervals)",
+    x = "Year",
+    y = "Rankings",
+    color = "Genre") +
+  theme_minimal() +
+  theme(legend.position = "none",  
+        plot.title = element_text(size = 20, hjust = 0.5, face = "bold"), 
+        plot.subtitle = element_text(size = 13, hjust = 0.5, face = "italic"),
+        axis.title.x = element_text(size = 15, face = "bold"), 
+        axis.title.y = element_text(size = 15, face = "bold"),
+        plot.margin = margin(t = 10, r = 40, b = 10, l = 10))+
+  coord_cartesian(clip = 'off')
+
+```
+
+## Discussion
+<div style="text-align: justify">
+Overall, when looking at the initial time intervals, namely between 2000 and 2015, the rankings saw significant shifts, notably with `Documentary` rising from 10th to 3rd, and `Action` dropping from 6th to 10th. Considering the time-frame of 2015 - 2025, the rankings generally stabilised, with 9 genres' rankings only fluctuating by 2 or less positions.
+Focusing on this tighter timeline, we see that the top 4 highest rated genres include `Romance`, `Drama`, `Documentary` and `Comedy`. To further streamline our analysis, apart from these four genres, we muted the colors of the other genres to optimize ink ratio.
+
+Scoping in on significant outliers on the dataset, we spot that romance dipped significantly between the years 2005-2010. We, jokingly, hypothesise that this be due to 2008 financial crisis causing people to lose faith in romance. In the same time-frame, the rankings of documentary saw a explosive rise,  from 10th to 1st. Likewise, perhaps people were busy catching up with the documentaries on the financial crisis, in hopes of making their money back! 
+</div>
+
+# Plot 3 
+
+## Choice of Visualisation and Rationale
+<div style="text-align: justify">
+The third plot aims to look at the different combination of genres, and seek a better understanding of which genres fared better than the rest in terms of rating
+
+Considering that some episodes had 3 genres, such as the 2003 Episode "Eloise at Christmastime" with `Adventure`, `Comedy`, and `Drama` - we initially found it difficult to visualise a correlation matrix in 3D - which was not exactly feasible. Hence, for such data points, we extracted the 2 highest average rated genres of the 3 and kept them. For this particular data point - `Comedy` and `Drama` were selected as they had better average ratings than `Adventure`, and hence this particular data point would be considered a `Comedy`-`Drama`. Conversely, for episodes with only 1 genre - like "Who Took the Merry Out of Christmas" (2005), would be considered a `Comedy`-`Comedy` in our data. 
+
+After ranking genres per episode by their average rating (across all episodes), we then select the top 1–2 genres per episode (based on rating) and extract those genres into two new columns: genre1 and genre2. Using `na.rm = TRUE`, we remove any rows with missing data and finally join back the full episode info.
+
+The choice of a correlation matrix using `geom_tile()` was specifically selected to represent our data as it allowed us to aptly capture the relationships of average ratings between specific pair-wise combinations of genres in an organised manner. This also allows us to make good use of colouring in the form of heatmaps that represent average ratings, allowing better readability for our users.
+
+A colour scheme was used to represent different values, with specific colours chosen to clearly distinguish between low and high values ("yellow", "orange", "maroon" for low to high respectively). This enhances the interpretability of the plot given that there were only a few outliers such as `GameShow`-`Romance` and `Family`-`Family` which were on the extreme ends of the ratings. Additionally, we labeled each combination with their average rating for increased clarity.
+</div>
+
+## Code Chunk and Visualisation 
+
+```{r additional data cleaning for plot 3 , echo = TRUE}
+
+# data cleaning for the third plot
+genre_ratings <- holiday_episode_genres %>%
+  left_join(holiday_episodes, by = "tconst") %>%
+  filter(year >= 2000) %>%
+  group_by(genres.x) %>%
+  summarise(avg_rate = mean(average_rating, na.rm=TRUE))
+
+
+cleaned_df3 <- holiday_episodes %>%
+  filter(year >= 2000) %>%
+  left_join(holiday_episode_genres, by = "tconst") %>%
+  left_join(genre_ratings, by = c("genres.y" = "genres.x")) %>%
+  group_by(tconst) %>%
+  arrange(desc(avg_rate), .by_group = TRUE) %>% 
+  summarise(top_genres = list(genres.y[1:min(2,length(genres.y))])) %>%
+  mutate( 
+    genre1 = sapply(top_genres, function(g) g[1]),
+    genre2 = sapply(top_genres, function(g) ifelse(length(g) == 1, g[1], g[2]))
+  ) %>%
+  select(tconst, genre1, genre2) %>%
+  na.omit() %>%
+  left_join(holiday_episodes, by = "tconst")
+
+
+dfp3 <- cleaned_df3 %>%
+  filter(genre1 %in% top_genres & genre2 %in% top_genres) %>%
+  group_by(genre1, genre2) %>%
+  summarise(genre_rating = mean(average_rating, na.rm = TRUE), frequency = n()) %>%
+  ungroup()
+
+
+
+
+```
+
+```{r correlation matrix plot, fig.cap = "Correlation Matrix of average ratings for combination of genres of holiday episodes in the 21st Century, where `Family` has the highest rating." ,  echo = TRUE}
+
+ggplot(dfp3, aes(x=genre1, y =genre2, fill = genre_rating)) +
+  geom_tile() +
+  geom_text(aes(label = round(genre_rating, 1)), color = "black", size = 3) +
+  labs(title = "Average Rating of Genre Combinations \nin 21st Century",
+       x = "genre", y = "genre") +
+  scale_fill_gradientn(colors = c("yellow", "orange", "maroon"), 
+                       limits = c(min(dfp3$genre_rating), max(dfp3$genre_rating))) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(size = 20,face = "bold", hjust = 0.5)) +
+  theme(legend.position = "top") +
+  labs(fill = "Average Rating")
+
+```
+
+## Discussion
+<div style="text-align: justify">
+When looking at the combination of genres, it seems to be that the top combinations of genres are `Family` as a stand-alone, `Drama` - `Adventure`, `Drama` - `Action` and `Documentary`-`Comedy`. However, if we look closer at the data, `Family` as an individual genre has only 1 such episode, meaning the possibility that this could be a one-hit wonder is relatively high with no further data to support its success across time. Looking past that, `Drama`-`Action` and `Drama`-`Adventure` have few data points to support its trend as well. Hence, disregarding those with few data points, `Documentary`-`Comedy` seems to be the best combination of genres, which makes sense considering they are 2 of the most popular genres in recent years, as can be seen from the second plot. However, one surprising outlier is `Romance`-`Game-Show` as it has the lowest rated holiday episode despite `Romance` being the top rated genre in recent years. This comes to show that not all combination of genres work for a holiday episode, hence careful selection has to be made.
+</div>
+
+
+
+# Conclusion
+<div style="text-align: justify">
+Across our three visualisations, we aimed to understand what contributes to a holiday episode's success in the 21st century, focusing on runtime, genre, and time trends. 
+
+From our first and second plots, `Drama` and `Comedy` emerged as consistently high-performing genres on their own, often associated with higher-rated episodes. However, when we moved to analysing genre pairings in the third plot, the combination of `Drama`-`Comedy` surprisingly was not as well-received as we believed. This suggests that while each of the aforementioned genre individually has strong appeal, blending them might dilute the elements that makes them work well on their own. Instead, if one were to choose `Drama`, pairing it with `Adventure` seems to be a more effective strategy. 
+
+Notably, the top genre combination was `Family`-`Family`, which scored a remarkable 9.5. While this result should be interpreted with caution due to the presence of only one data point, it does hint at the strong emotional appeal and universal relatability that family-centric stories can offer, especially during the holidays. Among combinations with more than one data point, `Documentary`-`Comedy`, and `Drama-Action` also performed strongly. 
+
+In summary, beyond the indivdual genres of Holiday Episodes, careful pairing is crucial. Following our central question, a filmmaker aiming for success in producing a highly rated holiday episode may consider producing an episode with a slightly longer runtime consisting of genres `Drama`-`Adventure` or `Documentary`-`Comedy`, which are more reliable and solid choices, while `Family`-`Family` could be a bold, high-reward experiment.
+</div>
+
+
+
+# Task Allocation
+For task allocation, Jing Herng, Charlene and Ryan were tasked with the visualisation and discussion of plots 1, 2 and 3 respectively. Sean handled the data cleaning, summary and the formatting of the rmd file while Xiang Ting handled the literature review to substantiate our discussions throughout.  
+
+
+# References 
+<div style="text-align: justify">
+R4DS Online Learning Community. (2023, December 19). TidyTuesday: Holiday Episodes dataset [Data set]. GitHub. https://github.com/rfordatascience/tidytuesday/blob/main/data/2023/2023-12-19/readme.md
+
+Choudhary, T., Chakraborty, T., Arun, D. P., Goyal, N., & Singla, S. (2023). Ratings and factors affecting across genres: A study from the entertainment industry (SSRN Scholarly Paper No. 4502176). SSRN. https://ssrn.com/abstract=4502176
+
+Qumsiyeh, R., & Ng, Y.-K. (2012). Predicting the ratings of multimedia items for making personalized recommendations. Proceedings of the 35th International ACM SIGIR Conference on Research and Development in Information Retrieval, 475–484. https://doi.org/10.1145/2348283.2348356
+
+Sochay, S. (1994). Predicting the performance of motion pictures. Journal of Media Economics, 7(4), 1–20. https://doi.org/10.1207/s15327736me0704_1
+
+
+</div>
